@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+<script>
+    window.addEventListener('load', function (ev) {
+        var ws = new WebSocket('ws://localhost:8080/ws/greetings')
+        ws.addEventListener('open', function (ev1) {
+            ws.send('Devoxx Belgium')
+        });
+
+        ws.addEventListener('message', function (msg) {
+            console.log('new message: ' + msg.data);
+        });
+
+    })
+</script>
+</body>
+</html>
