@@ -10,6 +10,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.r2dbc.connectionfactory.R2dbcTransactionManager;
@@ -21,7 +22,18 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.util.Assert;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.ServerResponse;
+import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
+import org.springframework.web.reactive.socket.WebSocketHandler;
+import org.springframework.web.reactive.socket.WebSocketMessage;
+import org.springframework.web.reactive.socket.WebSocketSession;
+import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.springframework.web.reactive.function.server.RouterFunctions.route;
 import static org.springframework.web.reactive.function.server.ServerResponse.ok;
@@ -53,6 +65,58 @@ public class ReservationServiceApplication {
 
 }
 
+@Configuration
+class GreetingWebsocketConfiguration {
+
+    @Bean
+    WebSocketHandler webSocketHandler(GreetingService greetingService) {
+        return session -> {
+            var receive = session
+                    .receive()
+                    .map(WebSocketMessage::getPayloadAsText)
+                    .map(GreetingRequest::new)
+                    .flatMap(greetingService::greet)
+                    .map(GreetingResponse::getMessage)
+                    .map(session::textMessage);
+            return session.send(receive);
+        };
+    }
+
+    @Bean
+    SimpleUrlHandlerMapping simpleUrlHandlerMapping(WebSocketHandler webSocketHandler) {
+        return new SimpleUrlHandlerMapping(Map.of("/ws/greetings", webSocketHandler), 10);
+    }
+
+    @Bean
+    WebSocketHandlerAdapter webSocketHandlerAdapter() {
+        return new WebSocketHandlerAdapter();
+    }
+}
+
+
+@Service
+class GreetingService {
+    Flux<GreetingResponse> greet(GreetingRequest request) {
+        return Flux
+                .fromStream(Stream.generate(() -> new GreetingResponse("Hello" + request.getName() + " @ " + Instant.now() + "!")))
+                .delayElements(Duration.ofSeconds(1));
+    }
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+class GreetingRequest {
+    private String name;
+}
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+class GreetingResponse {
+    private String message;
+}
+
 @Service
 @RequiredArgsConstructor
 class ReservationService {
@@ -63,11 +127,11 @@ class ReservationService {
     Flux<Reservation> saveAll(String... names) {
         return this.transactionalOperator
                 .transactional(
-                Flux
-        .fromArray(names)
-        .map(name -> new Reservation(null, name))
-        .flatMap(this.reservationRepository::save)
-        .doOnNext(r -> Assert.isTrue(isValid(r), "The name must have a capital first letter!")));
+                        Flux
+                                .fromArray(names)
+                                .map(name -> new Reservation(null, name))
+                                .flatMap(this.reservationRepository::save)
+                                .doOnNext(r -> Assert.isTrue(isValid(r), "The name must have a capital first letter!")));
     }
 
     private boolean isValid(Reservation r) {
