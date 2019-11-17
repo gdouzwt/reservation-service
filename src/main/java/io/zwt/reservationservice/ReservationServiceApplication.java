@@ -9,7 +9,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.boot.context.event.SpringApplicationEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.annotation.Id;
@@ -20,9 +19,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.ReactiveTransactionManager;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.util.Assert;
+import org.springframework.web.reactive.function.server.RouterFunction;
+import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Flux;
 
-import java.nio.channels.FileLock;
+import static org.springframework.web.reactive.function.server.RouterFunctions.route;
+import static org.springframework.web.reactive.function.server.ServerResponse.ok;
 
 @SpringBootApplication
 public class ReservationServiceApplication {
@@ -35,6 +37,13 @@ public class ReservationServiceApplication {
     @Bean
     TransactionalOperator transactionalOperator(ReactiveTransactionManager transactionManager) {
         return TransactionalOperator.create(transactionManager);
+    }
+
+    @Bean
+    RouterFunction<ServerResponse> routers(ReservationRepository rr) {
+        return route()
+                .GET("/reservations", serverRequest -> ok().body(rr.findAll(), Reservation.class))
+                .build();
     }
 
 
@@ -65,6 +74,18 @@ class ReservationService {
         return Character.isUpperCase(r.getName().charAt(0));
     }
 }
+
+//@RestController
+//@RequiredArgsConstructor
+//class ReservationRestController {
+//    private final ReservationRepository reservationRepository;
+//
+//    @GetMapping("/reservations")
+//    Flux<Reservation> reservationFlux() {
+//        return reservationRepository.findAll();
+//    }
+//}
+
 
 @Component
 @RequiredArgsConstructor
